@@ -5,6 +5,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   build-ios:
     runs-on: macos-latest
@@ -27,9 +30,15 @@ jobs:
       - name: Build IPA (no codesign)
         run: flutter build ipa --no-codesign
 
+      - name: List build output
+        run: find build/ios -name "*.ipa" -o -name "*.xcarchive" 2>/dev/null || echo "No ipa/xcarchive found"
+
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
           name: auto-derdacha-ipa
-          path: build/ios/ipa/*.ipa
+          path: |
+            build/ios/ipa/*.ipa
+            build/ios/archive/*.xcarchive
+          if-no-files-found: warn
           retention-days: 7
