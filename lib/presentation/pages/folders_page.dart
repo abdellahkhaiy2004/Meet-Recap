@@ -33,12 +33,12 @@ class FoldersPage extends ConsumerWidget {
         data: (folders) {
           if (folders.isEmpty) return const _EmptyState();
           return GridView.builder(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(12),
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 2,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
-              childAspectRatio: 0.85,
+              crossAxisSpacing: 10,
+              mainAxisSpacing: 10,
+              childAspectRatio: 1.05,
             ),
             itemCount: folders.length,
             itemBuilder: (context, i) {

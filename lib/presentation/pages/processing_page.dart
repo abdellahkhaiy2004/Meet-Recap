@@ -12,7 +12,11 @@ import '../../data/local/app_database.dart';
 import '../../data/repositories/meeting_repository.dart';
 import '../../domain/entities/meeting.dart';
 import '../state/meeting_controller.dart';
-import 'settings_page.dart' show forcedLanguageProvider;
+import 'settings_page.dart'
+    show
+        forcedLanguageProvider,
+        translateTranscriptToProvider,
+        darijaLatinizeProvider;
 
 // ── Provider ──────────────────────────────────────────────────────────────────
 
@@ -68,6 +72,8 @@ class _ProcessingPageState extends ConsumerState<ProcessingPage> {
     if (!mounted) return;
 
     final forcedLanguage = ref.read(forcedLanguageProvider);
+    final translateTo    = ref.read(translateTranscriptToProvider);
+    final latinizeDarija = ref.read(darijaLatinizeProvider);
     final repo = ref.read(meetingRepositoryProvider);
     unawaited(
       repo
@@ -78,6 +84,8 @@ class _ProcessingPageState extends ConsumerState<ProcessingPage> {
             folderId: folderId,
             cancelToken: _cancelToken,
             forcedLanguage: forcedLanguage,
+            translateTo: translateTo,
+            latinizeDarija: latinizeDarija,
           )
           .then((r) {
         if (!mounted) return;
@@ -101,12 +109,16 @@ class _ProcessingPageState extends ConsumerState<ProcessingPage> {
   Future<void> _retry(int meetingId) async {
     setState(() => _errorMessage = null);
     final forcedLanguage = ref.read(forcedLanguageProvider);
+    final translateTo    = ref.read(translateTranscriptToProvider);
+    final latinizeDarija = ref.read(darijaLatinizeProvider);
     final r = await ref
         .read(meetingRepositoryProvider)
         .retryPipeline(
           meetingId,
           cancelToken: _cancelToken,
           forcedLanguage: forcedLanguage,
+          translateTo: translateTo,
+          latinizeDarija: latinizeDarija,
         );
     if (!mounted) return;
     if (r.isErr) {

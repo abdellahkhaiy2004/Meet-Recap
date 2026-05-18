@@ -194,3 +194,61 @@ Parts 0–12 implemented. Pending owner actions before shipping:
 1. Run the QA checklist in `student_lab.md` [SL-0052] on a physical device.
 2. Add `android:enableOnBackInvokedCallback="true"` to `AndroidManifest.xml` after `flutter create .` ([IP-0046] BLOCKED on SDK install).
 3. Create annotated git tag `v0.1.0` ([IP-0057] BLOCKED — not a git repository yet; run `git init && git add -A && git commit -m "chore: initial commit"` then `git tag -a v0.1.0 -m "v0.1.0"`).
+
+---
+
+## Feature notes — Part 13 (2026-05-18)
+
+### Translate the transcript to French or English
+
+By default the transcript is kept in the language Whisper detected (typically Darija, French, English, or a mix). If you want every meeting transcript in a single target language:
+
+1. Open the **Réglages** tab.
+2. Under **Traduire le transcript**, choose **Traduire en français** or **Traduire en anglais**.
+3. The next recording's transcript will be translated automatically after Whisper finishes and before the summary is generated. The summary will then also be in that language.
+4. Set back to **Ne pas traduire** to keep the original language.
+
+If the translation request fails (network issue, API error), the original transcript is kept and the meeting is still saved with its summary — translation is a soft step, not a blocking one.
+
+### Darija in Latin alphabet (arabizi)
+
+Whisper returns Darija in Arabic script by default. If you prefer the Latin "arabizi" convention (using digits 2/3/5/7/9 for Arabic-specific sounds):
+
+1. Open the **Réglages** tab.
+2. Toggle **Darija en alphabet latin** on.
+3. Any future recording detected as Arabic will have its transcript rewritten in Latin script. The summary inherits the script automatically.
+
+Both settings can be on at the same time — a single LLM call applies both rules.
+
+### Troubleshooting addendum
+
+| Symptom | Fix |
+|---|---|
+| Transcript is still in Arabic after enabling Darija Latin | The toggle only affects future recordings. Re-process an existing meeting via the "Re-résumer" button or record a new one. |
+| Translation toggle has no effect | The setting is read at pipeline start. Change it BEFORE pressing Stop, then start a new recording. |
+| Calendar meeting tap shows a black screen | Fixed in this build (Part 13). If it still happens, run `flutter clean && flutter pub get && flutter run --dart-define-from-file=.env`. |
+
+---
+
+## Feature notes — Part 14 (2026-05-18)
+
+### Edit a folder after creating it
+
+Folders are no longer locked once created — every field except the meeting count is editable.
+
+1. Open the **Dossiers** tab and tap the folder you want to change.
+2. In the folder detail page, open the overflow menu (top-right) and tap **Modifier**.
+3. Change the name, category, colour, or icon. The preview card updates live.
+4. Tap **Enregistrer** in the top bar (or **Enregistrer les modifications** at the bottom). You are returned to the detail page with the new look applied.
+
+The **Boîte de réception** (Inbox) is editable as well — you can rename it or change its colour — but it cannot be deleted (its system role as the default fallback folder is preserved).
+
+### Filter the calendar by folder
+
+The Calendrier tab now has a chip row above the month grid. Each chip represents one of your folders.
+
+1. Tap one or more folder chips to filter — only meetings and events from the selected folders will appear on the calendar (dots, day preview, day sheet).
+2. Tap **Tous** to clear the filter and see everything again. Tapping the last active chip also clears the filter.
+3. When **exactly one** folder is active, tapping the **Planifier** FAB opens the scheduling form with that folder pre-selected, so you can quickly add multiple events to the same folder without re-picking each time.
+
+The filter is per-session — it resets when you close the app. The chip row is hidden when you have fewer than two folders (nothing to filter).

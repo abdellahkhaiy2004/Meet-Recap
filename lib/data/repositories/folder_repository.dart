@@ -18,8 +18,12 @@ class FolderRepository {
 
   // ── Reads ──────────────────────────────────────────────────────────────────
 
+  /// Live folder list with reactive meeting counts (joins both tables so the
+  /// count badge updates immediately on insert/move/delete — no manual refresh).
   Stream<List<Folder>> watchAll() =>
-      _dao.watchAll().asyncMap(_enrichWithCounts);
+      _dao.watchAllWithCounts().map(
+            (rows) => rows.map((r) => _rowToEntity(r.folder, r.count)).toList(),
+          );
 
   Stream<Folder?> watchById(int id) =>
       _dao.watchById(id).asyncMap((row) async {
@@ -54,7 +58,7 @@ class FolderRepository {
         FoldersCompanion.insert(
           name: name,
           category: Value(category.name),
-          colorHex: Value(colorHex),
+          colorHex: colorHex,
           iconName: Value(iconName),
         ),
       );

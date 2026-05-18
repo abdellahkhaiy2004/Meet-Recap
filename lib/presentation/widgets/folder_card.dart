@@ -57,22 +57,22 @@ class FolderCard extends StatelessWidget {
               ],
             ),
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(12),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // ── Icon ────────────────────────────────────────────────
                   Container(
-                    width: 40,
-                    height: 40,
+                    width: 32,
+                    height: 32,
                     decoration: BoxDecoration(
                       color: Colors.white.withAlpha(51), // 20 %
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(8),
                     ),
                     child: Icon(
                       _iconForName(folder.iconName),
                       color: textColor,
-                      size: 22,
+                      size: 18,
                     ),
                   ),
                   const Spacer(),
@@ -81,12 +81,12 @@ class FolderCard extends StatelessWidget {
                     folder.name,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: textColor,
                           fontWeight: FontWeight.w600,
                         ),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 2),
                   // ── Meeting count ────────────────────────────────────────
                   Text(
                     '${folder.meetingCount} réunion${folder.meetingCount != 1 ? 's' : ''}',
@@ -110,8 +110,8 @@ class FolderCard extends StatelessWidget {
         )
         .moveY(
           begin: 0,
-          end: -5,
-          duration: const Duration(milliseconds: 2200),
+          end: -2,
+          duration: const Duration(milliseconds: 2800),
           curve: Curves.easeInOut,
         );
   }

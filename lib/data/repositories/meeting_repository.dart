@@ -12,6 +12,7 @@ import '../local/meeting_dao.dart';
 import '../local/tables.dart';
 import '../remote/summary_api.dart';
 import '../remote/transcription_api.dart';
+import '../remote/translation_api.dart';
 import 'calendar_repository.dart';
 
 /// Orchestrates the full pipeline: record → transcribe → summarize → persist.
@@ -23,15 +24,18 @@ class MeetingRepository {
     required MeetingDao meetingDao,
     required TranscriptionApi transcriptionApi,
     required SummaryApi summaryApi,
+    required TranslationApi translationApi,
     CalendarRepository? calendarRepository,
   })  : _dao = meetingDao,
         _transcription = transcriptionApi,
         _summary = summaryApi,
+        _translation = translationApi,
         _calRepo = calendarRepository;
 
   final MeetingDao _dao;
   final TranscriptionApi _transcription;
   final SummaryApi _summary;
+  final TranslationApi _translation;
   // Nullable — injected at Part 7; avoids circular dep before CalendarRepo exists.
   final CalendarRepository? _calRepo;
 
@@ -51,7 +55,9 @@ class MeetingRepository {
     String title = '',
     int? linkedEventId,  // IP-0039: set when recording is tied to a calendar event
     CancelToken? cancelToken,
-    String? forcedLanguage,  // IP-0053: null = Whisper auto-detect
+    String? forcedLanguage,   // IP-0053: null = Whisper auto-detect
+    String? translateTo,      // P-0097: null = no translation, else 'fr'/'en'
+    bool latinizeDarija = false, // P-0097: rewrite Arabic Darija in Latin
   }) async {
     final effectiveTitle = title.isEmpty
         ? 'Réunion ${DateTime.now().toLocal().toString().substring(0, 16)}'
@@ -61,7 +67,7 @@ class MeetingRepository {
     final id = await _dao.insert(
       MeetingsCompanion.insert(
         draftId: draftId,
-        folderId: Value(folderId),
+        folderId: folderId,
         title: effectiveTitle,
         audioPath: audioFile.path,
         durationSeconds: Value(durationSeconds),
@@ -75,6 +81,8 @@ class MeetingRepository {
       audioFile: audioFile,
       cancelToken: cancelToken,
       forcedLanguage: forcedLanguage,
+      translateTo: translateTo,
+      latinizeDarija: latinizeDarija,
     );
 
     // IP-0039: after success, link the CalendarEvent row to this meeting.
@@ -91,6 +99,8 @@ class MeetingRepository {
     int meetingId, {
     CancelToken? cancelToken,
     String? forcedLanguage,  // IP-0053
+    String? translateTo,
+    bool latinizeDarija = false,
   }) async {
     final row = await _dao.getById(meetingId);
     if (row == null) {
@@ -106,6 +116,8 @@ class MeetingRepository {
       cancelToken: cancelToken,
       forceSend: true, // bypass silence check on explicit retry
       forcedLanguage: forcedLanguage,
+      translateTo: translateTo,
+      latinizeDarija: latinizeDarija,
     );
   }
 
@@ -115,6 +127,8 @@ class MeetingRepository {
     CancelToken? cancelToken,
     bool forceSend = false,
     String? forcedLanguage,  // IP-0053: null = Whisper auto-detect
+    String? translateTo,        // P-0097
+    bool latinizeDarija = false, // P-0097
   }) async {
     // ── Silent audio pre-check (IP-0050) ──────────────────────────────────
     // Heuristic: AAC-LC 16 kHz mono ≈ 4 KB/s. Threshold 1 KB/s is very
@@ -156,6 +170,32 @@ class MeetingRepository {
     }
 
     if (isChunked) await AudioChunker.cleanup(audioFile, chunks);
+
+    // Detect dominant language now so the post-processing step can decide
+    // whether to translate / transliterate. Whisper doesn't return the BCP-47
+    // code through our wrapper, so we use the same heuristic as the summary
+    // step below.
+    final preLang = _heuristicLang(fullTranscript);
+
+    // Step 1b — Optional post-processing (translate to fr/en, Latin Darija).
+    // Fails soft: returns the original transcript on any non-cancel error
+    // so summarization can still proceed. See TranslationApi.postProcess.
+    if (translateTo != null || latinizeDarija) {
+      final post = await _translation.postProcess(
+        fullTranscript,
+        translateTo: translateTo,
+        latinizeDarija: latinizeDarija,
+        detectedLang: preLang,
+        cancelToken: cancelToken,
+      );
+      if (post.isErr) {
+        // Only true cancellations bubble up; soft failures returned Ok.
+        await _dao.updatePipelineState(id, 'failed');
+        return Err((post as Err).failure);
+      }
+      fullTranscript = (post as Ok<String>).value;
+    }
+
     await _dao.updateTranscript(id, fullTranscript);
 
     // Step 2 — Summarize
@@ -302,6 +342,7 @@ final meetingRepositoryProvider = Provider<MeetingRepository>((ref) {
     meetingDao: ref.watch(appDatabaseProvider).meetingDao,
     transcriptionApi: ref.watch(transcriptionApiProvider),
     summaryApi: ref.watch(summaryApiProvider),
+    translationApi: ref.watch(translationApiProvider),
     calendarRepository: ref.watch(calendarRepositoryProvider),
   );
 });

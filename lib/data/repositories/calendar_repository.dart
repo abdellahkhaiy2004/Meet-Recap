@@ -52,7 +52,7 @@ class CalendarRepository {
       _dao.insert(
         CalendarEventsCompanion.insert(
           title: title,
-          folderId: Value(folderId),
+          folderId: folderId,
           startsAt: startsAt,
           endsAt: endsAt,
           reminderMinutes: Value(reminderMinutes),

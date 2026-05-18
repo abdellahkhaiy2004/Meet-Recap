@@ -45,7 +45,26 @@ final routerProvider = Provider<GoRouter>((ref) {
               routes: [
                 GoRoute(
                   path: 'schedule',
-                  pageBuilder: (c, s) => _slide(s, const ScheduleEventPage()),
+                  pageBuilder: (c, s) => _slide(
+                    s,
+                    ScheduleEventPage(
+                      initialFolderId:
+                          int.tryParse(s.uri.queryParameters['folderId'] ?? ''),
+                    ),
+                  ),
+                ),
+                // Parallel meeting route — opening a meeting from a calendar
+                // day sheet stays inside the calendar back-stack. Without this
+                // the user got a black screen because the canonical meeting
+                // route lives under /folders (different shell branch).
+                GoRoute(
+                  path: 'meetings/:meetingId',
+                  pageBuilder: (c, s) => _slide(
+                    s,
+                    MeetingDetailPage(
+                      meetingId: s.pathParameters['meetingId']!,
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -73,6 +92,18 @@ final routerProvider = Provider<GoRouter>((ref) {
                         s,
                         MeetingDetailPage(
                           meetingId: s.pathParameters['meetingId']!,
+                        ),
+                      ),
+                    ),
+                    // Edit existing folder (IP-0060/G2). Reuses NewFolderPage
+                    // with a non-null folderId so it switches to edit mode.
+                    GoRoute(
+                      path: 'edit',
+                      pageBuilder: (c, s) => _slide(
+                        s,
+                        NewFolderPage(
+                          folderId:
+                              int.tryParse(s.pathParameters['folderId']!),
                         ),
                       ),
                     ),

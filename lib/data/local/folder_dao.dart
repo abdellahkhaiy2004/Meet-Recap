@@ -5,17 +5,43 @@ import 'tables.dart';
 
 part 'folder_dao.g.dart';
 
+/// Pair of a folder row and its current meeting count.
+/// Used by [FolderDao.watchAllWithCounts] so the UI gets count updates
+/// the moment a meeting is added/moved/deleted (no tab-switch refresh).
+typedef FolderWithCount = ({FolderData folder, int count});
+
 @DriftAccessor(tables: [Folders, Meetings])
 class FolderDao extends DatabaseAccessor<AppDatabase> with _$FolderDaoMixin {
   FolderDao(super.db);
 
   // ── Queries ────────────────────────────────────────────────────────────────
 
-  /// All folders ordered by creation date, with live meeting count via subquery.
+  /// All folders ordered by creation date.
   Stream<List<FolderData>> watchAll() {
-    return select(folders)
-      ..orderBy([(f) => OrderingTerm.asc(f.createdAt)])
-      ..watch() as Stream<List<FolderData>>;
+    return (select(folders)
+          ..orderBy([(f) => OrderingTerm.asc(f.createdAt)]))
+        .watch();
+  }
+
+  /// All folders + their current meeting count, joined and grouped.
+  /// Drift auto-tracks both tables in the join so this stream re-emits
+  /// whenever a folder OR a meeting changes — fixes the stale-count bug
+  /// where the badge only refreshed after switching tabs.
+  Stream<List<FolderWithCount>> watchAllWithCounts() {
+    final countExp = meetings.id.count();
+    final query = select(folders).join([
+      leftOuterJoin(meetings, meetings.folderId.equalsExp(folders.id)),
+    ])
+      ..addColumns([countExp])
+      ..groupBy([folders.id])
+      ..orderBy([OrderingTerm(expression: folders.createdAt)]);
+
+    return query.watch().map((rows) => rows
+        .map((row) => (
+              folder: row.readTable(folders),
+              count: row.read(countExp) ?? 0,
+            ))
+        .toList());
   }
 
   /// Single folder by id — returns null if not found.
@@ -34,13 +60,15 @@ class FolderDao extends DatabaseAccessor<AppDatabase> with _$FolderDaoMixin {
   Future<int> insert(FoldersCompanion companion) =>
       into(folders).insert(companion);
 
-  Future<bool> update(FoldersCompanion companion) =>
-      (updateReturning(folders, companion)) != null
-          ? Future.value(true)
-          : Future.value(false);
+  Future<bool> updateCompanion(FoldersCompanion companion) async {
+    final affected = await (super.update(folders)
+          ..where((f) => f.id.equals(companion.id.value)))
+        .write(companion);
+    return affected > 0;
+  }
 
   Future<void> updateFolder(FolderData folder) =>
-      (update(folders)..where((f) => f.id.equals(folder.id))).write(
+      (super.update(folders)..where((f) => f.id.equals(folder.id))).write(
         FoldersCompanion(
           name: Value(folder.name),
           category: Value(folder.category),

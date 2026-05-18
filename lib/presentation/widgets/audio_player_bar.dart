@@ -58,7 +58,7 @@ class _AudioPlayerBarState extends ConsumerState<AudioPlayerBar> {
                       const RoundSliderOverlayShape(overlayRadius: 14),
                 ),
                 child: Slider(
-                  value: sliderValue.clamp(0, totalSecs),
+                  value: sliderValue.clamp(0.0, totalSecs).toDouble(),
                   min: 0,
                   max: totalSecs,
                   onChanged: state.isLoading
@@ -123,23 +123,23 @@ class _AudioPlayerBarState extends ConsumerState<AudioPlayerBar> {
                     children: [
                       IconButton(
                         tooltip: 'Reculer de 15 secondes',
-                        icon: const Icon(Icons.replay_15_rounded),
+                        icon: const Icon(Icons.replay_10_rounded),
                         onPressed: state.isLoading
                             ? null
-                            : () => notifier.seek(
-                                  (state.position - const Duration(seconds: 15))
-                                      .clamp(Duration.zero, state.duration),
-                                ),
+                            : () {
+                                final d = state.position - const Duration(seconds: 15);
+                                notifier.seek(d < Duration.zero ? Duration.zero : d);
+                              },
                       ),
                       IconButton(
                         tooltip: 'Avancer de 15 secondes',
-                        icon: const Icon(Icons.forward_15_rounded),
+                        icon: const Icon(Icons.forward_10_rounded),
                         onPressed: state.isLoading
                             ? null
-                            : () => notifier.seek(
-                                  (state.position + const Duration(seconds: 15))
-                                      .clamp(Duration.zero, state.duration),
-                                ),
+                            : () {
+                                final d = state.position + const Duration(seconds: 15);
+                                notifier.seek(d > state.duration ? state.duration : d);
+                              },
                       ),
                     ],
                   ),

@@ -13,7 +13,11 @@ import '../state/folder_controller.dart';
 /// [PopScope] blocks back if form is dirty → discard confirmation sheet.
 /// On save: persists via [CalendarRepository] + schedules via [NotificationService].
 class ScheduleEventPage extends ConsumerStatefulWidget {
-  const ScheduleEventPage({super.key});
+  const ScheduleEventPage({super.key, this.initialFolderId});
+
+  /// Pre-selected folder id (IP-0060/H3). Used when the user opens the page
+  /// from the calendar with a single-folder filter active.
+  final int? initialFolderId;
 
   @override
   ConsumerState<ScheduleEventPage> createState() => _ScheduleEventPageState();
@@ -24,6 +28,12 @@ class _ScheduleEventPageState extends ConsumerState<ScheduleEventPage> {
   final _titleCtrl = TextEditingController();
 
   int? _selectedFolderId;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedFolderId = widget.initialFolderId;
+  }
   DateTime _startsAt = _roundUp(DateTime.now(), 30);
   DateTime _endsAt = _roundUp(DateTime.now(), 30).add(const Duration(hours: 1));
   int _reminderMinutes = 15;

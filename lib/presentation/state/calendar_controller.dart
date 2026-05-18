@@ -14,6 +14,7 @@ class CalendarState {
     this.events = const {},
     this.meetings = const {},
     this.isLoading = false,
+    this.selectedFolderIds,
   });
 
   final DateTime focusedDay;
@@ -27,12 +28,17 @@ class CalendarState {
 
   final bool isLoading;
 
+  /// Folder filter (IP-0060/H1). null = show all; non-null set = show only
+  /// meetings/events whose folderId is in the set. Empty set = hide everything.
+  final Set<int>? selectedFolderIds;
+
   CalendarState copyWith({
     DateTime? focusedDay,
     DateTime? selectedDay,
     Map<DateTime, List<CalendarEvent>>? events,
     Map<DateTime, List<Meeting>>? meetings,
     bool? isLoading,
+    Object? selectedFolderIds = _unset,
   }) =>
       CalendarState(
         focusedDay: focusedDay ?? this.focusedDay,
@@ -40,8 +46,15 @@ class CalendarState {
         events: events ?? this.events,
         meetings: meetings ?? this.meetings,
         isLoading: isLoading ?? this.isLoading,
+        selectedFolderIds: identical(selectedFolderIds, _unset)
+            ? this.selectedFolderIds
+            : selectedFolderIds as Set<int>?,
       );
 }
+
+// Sentinel for nullable copyWith — lets callers pass null explicitly to reset
+// the filter without us misreading "missing argument" as "set to null".
+const _unset = Object();
 
 // ── Notifier ──────────────────────────────────────────────────────────────────
 
@@ -98,13 +111,40 @@ class CalendarController extends Notifier<CalendarState> {
     );
   }
 
+  // ── Folder filter (IP-0060/H1) ─────────────────────────────────────────────
+
+  /// Pass null to clear the filter; non-null Set restricts visible items.
+  void setFolderFilter(Set<int>? ids) =>
+      state = state.copyWith(selectedFolderIds: ids);
+
+  /// Convenience used by chip taps: toggle a folder id in/out of the filter.
+  /// Clearing the last filtered folder switches back to "show all" (null).
+  void toggleFolder(int folderId) {
+    final current = state.selectedFolderIds;
+    if (current == null) {
+      state = state.copyWith(selectedFolderIds: {folderId});
+      return;
+    }
+    final next = Set<int>.from(current);
+    if (!next.add(folderId)) next.remove(folderId);
+    state = state.copyWith(selectedFolderIds: next.isEmpty ? null : next);
+  }
+
   // ── Helpers ────────────────────────────────────────────────────────────────
 
-  List<CalendarEvent> eventsForDay(DateTime day) =>
-      state.events[_dayKey(day)] ?? [];
+  List<CalendarEvent> eventsForDay(DateTime day) {
+    final all = state.events[_dayKey(day)] ?? [];
+    final filter = state.selectedFolderIds;
+    if (filter == null) return all;
+    return all.where((e) => filter.contains(e.folderId)).toList();
+  }
 
-  List<Meeting> meetingsForDay(DateTime day) =>
-      state.meetings[_dayKey(day)] ?? [];
+  List<Meeting> meetingsForDay(DateTime day) {
+    final all = state.meetings[_dayKey(day)] ?? [];
+    final filter = state.selectedFolderIds;
+    if (filter == null) return all;
+    return all.where((m) => filter.contains(m.folderId)).toList();
+  }
 
   static DateTime _dayKey(DateTime dt) =>
       DateTime.utc(dt.year, dt.month, dt.day);

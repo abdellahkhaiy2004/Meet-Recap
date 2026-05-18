@@ -17,7 +17,7 @@ final class NetworkFailure extends Failure {
 
 /// The remote API returned a non-2xx status code.
 final class ApiFailure extends Failure {
-  const ApiFailure({required this.status, required super.message});
+  const ApiFailure({required this.status, required String message}) : super(message);
   final int status;
 }
 

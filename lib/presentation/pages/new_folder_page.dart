@@ -3,17 +3,28 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_colors.dart';
+import '../../data/repositories/folder_repository.dart';
 import '../../domain/entities/category.dart';
 import '../state/folder_controller.dart';
 import '../widgets/folder_card.dart';
 
-/// Form page for creating a new folder (architecture §4, IP-0032).
+/// Form page for creating OR editing a folder (architecture §4, IP-0032, IP-0060).
 ///
-/// Fields: name, category (segmented buttons), colour swatch (12 presets),
-/// icon picker (grid of 19 icons). [PopScope] blocks back navigation when the
-/// form is dirty — shows a "Discard changes?" confirmation sheet.
+/// When [folderId] is null the page acts as the original create flow. When set,
+/// the page loads the existing folder via FolderRepository, prefills all
+/// fields, and Save routes through FolderController.updateFolder.
+///
+/// Dual-purpose was kept inside this file (rather than splitting into
+/// EditFolderPage) so the form widgets, swatches, and icon picker stay in
+/// one place — the file name is slightly misleading for edit mode but no
+/// imports outside this file need updating.
 class NewFolderPage extends ConsumerStatefulWidget {
-  const NewFolderPage({super.key});
+  const NewFolderPage({super.key, this.folderId});
+
+  /// When non-null, the page enters edit mode for that folder id.
+  final int? folderId;
+
+  bool get _isEdit => folderId != null;
 
   @override
   ConsumerState<NewFolderPage> createState() => _NewFolderPageState();
@@ -27,12 +38,58 @@ class _NewFolderPageState extends ConsumerState<NewFolderPage> {
   Color _color = AppColors.folderSwatches.first;
   String _iconName = 'briefcase';
   bool _saving = false;
+  bool _loading = false;
 
-  bool get _isDirty =>
-      _nameCtrl.text.trim().isNotEmpty ||
-      _category != Category.work ||
-      _color != AppColors.folderSwatches.first ||
-      _iconName != 'briefcase';
+  // Snapshot of initial values used by _isDirty in edit mode; in create mode
+  // _isDirty stays anchored to the "blank form" defaults.
+  String _initialName = '';
+  Category _initialCategory = Category.work;
+  Color _initialColor = AppColors.folderSwatches.first;
+  String _initialIcon = 'briefcase';
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget._isEdit) {
+      _loading = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _loadExisting());
+    }
+  }
+
+  Future<void> _loadExisting() async {
+    final folder =
+        await ref.read(folderRepositoryProvider).getById(widget.folderId!);
+    if (!mounted) return;
+    if (folder == null) {
+      // Defensive: someone deleted the folder between list and edit. Bail out.
+      context.pop();
+      return;
+    }
+    setState(() {
+      _nameCtrl.text = folder.name;
+      _category = folder.category;
+      _color = AppColors.hexToColor(folder.colorHex);
+      _iconName = folder.iconName;
+      _initialName = folder.name;
+      _initialCategory = folder.category;
+      _initialColor = _color;
+      _initialIcon = folder.iconName;
+      _loading = false;
+    });
+  }
+
+  bool get _isDirty {
+    if (widget._isEdit) {
+      return _nameCtrl.text.trim() != _initialName ||
+          _category != _initialCategory ||
+          _color.value != _initialColor.value ||
+          _iconName != _initialIcon;
+    }
+    return _nameCtrl.text.trim().isNotEmpty ||
+        _category != Category.work ||
+        _color != AppColors.folderSwatches.first ||
+        _iconName != 'briefcase';
+  }
 
   @override
   void dispose() {
@@ -99,12 +156,23 @@ class _NewFolderPageState extends ConsumerState<NewFolderPage> {
     // Convert Color to 6-char hex without '#'.
     final hex = _color.value.toRadixString(16).padLeft(8, '0').substring(2);
 
-    await ref.read(folderControllerProvider.notifier).createFolder(
-          name: _nameCtrl.text.trim(),
-          category: _category,
-          colorHex: hex,
-          iconName: _iconName,
-        );
+    final notifier = ref.read(folderControllerProvider.notifier);
+    if (widget._isEdit) {
+      await notifier.updateFolder(
+        id: widget.folderId!,
+        name: _nameCtrl.text.trim(),
+        category: _category,
+        colorHex: hex,
+        iconName: _iconName,
+      );
+    } else {
+      await notifier.createFolder(
+        name: _nameCtrl.text.trim(),
+        category: _category,
+        colorHex: hex,
+        iconName: _iconName,
+      );
+    }
 
     if (mounted) context.pop();
   }
@@ -122,7 +190,7 @@ class _NewFolderPageState extends ConsumerState<NewFolderPage> {
       },
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Nouveau dossier'),
+          title: Text(widget._isEdit ? 'Modifier le dossier' : 'Nouveau dossier'),
           actions: [
             if (_saving)
               const Padding(
@@ -134,12 +202,14 @@ class _NewFolderPageState extends ConsumerState<NewFolderPage> {
               )
             else
               TextButton(
-                onPressed: _save,
-                child: const Text('Créer'),
+                onPressed: _loading ? null : _save,
+                child: Text(widget._isEdit ? 'Enregistrer' : 'Créer'),
               ),
           ],
         ),
-        body: Form(
+        body: _loading
+            ? const Center(child: CircularProgressIndicator())
+            : Form(
           key: _formKey,
           child: ListView(
             padding: const EdgeInsets.all(20),
@@ -200,7 +270,9 @@ class _NewFolderPageState extends ConsumerState<NewFolderPage> {
               // ── Primary CTA ──────────────────────────────────────────────
               FilledButton.icon(
                 icon: const Icon(Icons.check_rounded),
-                label: const Text('Créer le dossier'),
+                label: Text(widget._isEdit
+                    ? 'Enregistrer les modifications'
+                    : 'Créer le dossier'),
                 onPressed: _saving ? null : _save,
               ),
             ],

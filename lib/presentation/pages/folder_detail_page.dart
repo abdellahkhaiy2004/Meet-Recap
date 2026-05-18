@@ -42,16 +42,19 @@ class _FolderDetailPageState extends ConsumerState<FolderDetailPage> {
       loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
       error: (e, _) => Scaffold(appBar: AppBar(), body: Center(child: Text('Erreur : $e'))),
       data: (folder) {
-        final categoryColor = folder != null
-            ? AppColors.forCategory(folder.category)
+        // Use the folder's own colorHex (set by user at creation) so the
+        // detail page theme matches the folder card visually. Falls back
+        // to the category color if hex parsing fails.
+        final folderColor = folder != null
+            ? AppColors.hexToColor(folder.colorHex)
             : AppColors.primarySeed;
 
         return Scaffold(
-          // ── AppBar with category colour band ──────────────────────────────
+          // ── AppBar tinted with folder colour ──────────────────────────────
           appBar: AppBar(
             title: Text(folder?.name ?? 'Dossier'),
-            backgroundColor: categoryColor,
-            foregroundColor: AppColors.contrastOn(categoryColor),
+            backgroundColor: folderColor,
+            foregroundColor: AppColors.contrastOn(folderColor),
             actions: [
               // Sort toggle
               IconButton(
@@ -67,18 +70,40 @@ class _FolderDetailPageState extends ConsumerState<FolderDetailPage> {
                       : _SortMode.date;
                 }),
               ),
-              // Delete folder (non-Inbox)
-              if (folder != null && !folder.isInbox)
+              // Folder actions: edit (any folder including Inbox name/colour),
+              // delete (non-Inbox only). [IP-0060/G3]
+              if (folder != null)
                 PopupMenuButton<String>(
                   onSelected: (v) async {
-                    if (v == 'delete') await _deleteFolder(folder.id);
+                    switch (v) {
+                      case 'edit':
+                        context.push('/folders/${folder.id}/edit');
+                      case 'delete':
+                        await _deleteFolder(folder.id);
+                    }
                   },
                   itemBuilder: (_) => [
                     const PopupMenuItem(
-                      value: 'delete',
-                      child: Text('Supprimer le dossier',
-                          style: TextStyle(color: Colors.red)),
+                      value: 'edit',
+                      child: ListTile(
+                        leading: Icon(Icons.edit_rounded),
+                        title: Text('Modifier'),
+                        contentPadding: EdgeInsets.zero,
+                        dense: true,
+                      ),
                     ),
+                    if (!folder.isInbox)
+                      const PopupMenuItem(
+                        value: 'delete',
+                        child: ListTile(
+                          leading: Icon(Icons.delete_outline_rounded,
+                              color: Colors.red),
+                          title: Text('Supprimer le dossier',
+                              style: TextStyle(color: Colors.red)),
+                          contentPadding: EdgeInsets.zero,
+                          dense: true,
+                        ),
+                      ),
                   ],
                 ),
             ],
@@ -117,6 +142,7 @@ class _FolderDetailPageState extends ConsumerState<FolderDetailPage> {
           floatingActionButton: FloatingActionButton(
             heroTag: 'fab_record_folder_${widget.folderId}',
             tooltip: 'Enregistrer dans ce dossier',
+            shape: const CircleBorder(),
             onPressed: () => context.go(
               '/record?folderId=${widget.folderId}',
             ),

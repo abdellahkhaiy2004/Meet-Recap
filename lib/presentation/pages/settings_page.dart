@@ -77,6 +77,71 @@ final forcedLanguageProvider =
   ForcedLanguageNotifier.new,
 );
 
+// ── Transcript translation target ─────────────────────────────────────────
+// Owner-requested feature: after Whisper returns the raw transcript, optionally
+// translate it to FR or EN via the Groq LLM. null = no translation.
+
+class TranslateTranscriptToNotifier extends Notifier<String?> {
+  static const _key = 'translate_transcript_to';
+
+  @override
+  String? build() {
+    _load();
+    return null;
+  }
+
+  Future<void> _load() async {
+    final prefs = await SharedPreferences.getInstance();
+    state = prefs.getString(_key);
+  }
+
+  Future<void> set(String? lang) async {
+    state = lang;
+    final prefs = await SharedPreferences.getInstance();
+    if (lang == null) {
+      await prefs.remove(_key);
+    } else {
+      await prefs.setString(_key, lang);
+    }
+  }
+}
+
+final translateTranscriptToProvider =
+    NotifierProvider<TranslateTranscriptToNotifier, String?>(
+  TranslateTranscriptToNotifier.new,
+);
+
+// ── Darija Latin script preference ────────────────────────────────────────
+// Owner-requested feature: when Whisper outputs Darija in Arabic script, the
+// LLM post-processing step transliterates it to Latin (so the transcript and
+// summary both use Latin Darija). Default false = keep Arabic script.
+
+class DarijaLatinizeNotifier extends Notifier<bool> {
+  static const _key = 'darija_latinize';
+
+  @override
+  bool build() {
+    _load();
+    return false;
+  }
+
+  Future<void> _load() async {
+    final prefs = await SharedPreferences.getInstance();
+    state = prefs.getBool(_key) ?? false;
+  }
+
+  Future<void> set(bool v) async {
+    state = v;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_key, v);
+  }
+}
+
+final darijaLatinizeProvider =
+    NotifierProvider<DarijaLatinizeNotifier, bool>(
+  DarijaLatinizeNotifier.new,
+);
+
 // ── SettingsPage ───────────────────────────────────────────────────────────
 
 class SettingsPage extends ConsumerWidget {
@@ -86,6 +151,8 @@ class SettingsPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final themeMode      = ref.watch(themeModeProvider);
     final forcedLanguage = ref.watch(forcedLanguageProvider);
+    final translateTo    = ref.watch(translateTranscriptToProvider);
+    final darijaLatinize = ref.watch(darijaLatinizeProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Réglages')),
@@ -143,6 +210,46 @@ class SettingsPage extends ConsumerWidget {
             groupValue: forcedLanguage,
             onChanged: (v) =>
                 ref.read(forcedLanguageProvider.notifier).set(v),
+          ),
+          const Divider(),
+
+          // ── Translation target ────────────────────────────────────────
+          _SectionHeader('Traduire le transcript'),
+          RadioListTile<String?>(
+            title: const Text('Ne pas traduire (défaut)'),
+            subtitle: const Text('Garder la langue d\'origine'),
+            value: null,
+            groupValue: translateTo,
+            onChanged: (v) =>
+                ref.read(translateTranscriptToProvider.notifier).set(v),
+          ),
+          RadioListTile<String?>(
+            title: const Text('Traduire en français'),
+            value: 'fr',
+            groupValue: translateTo,
+            onChanged: (v) =>
+                ref.read(translateTranscriptToProvider.notifier).set(v),
+          ),
+          RadioListTile<String?>(
+            title: const Text('Traduire en anglais'),
+            value: 'en',
+            groupValue: translateTo,
+            onChanged: (v) =>
+                ref.read(translateTranscriptToProvider.notifier).set(v),
+          ),
+          const Divider(),
+
+          // ── Darija Latin transliteration ──────────────────────────────
+          _SectionHeader('Darija — alphabet'),
+          SwitchListTile(
+            title: const Text('Darija en alphabet latin'),
+            subtitle: const Text(
+              'Translittère le Darija (arabe) en lettres latines. '
+              'S\'applique au transcript et au résumé.',
+            ),
+            value: darijaLatinize,
+            onChanged: (v) =>
+                ref.read(darijaLatinizeProvider.notifier).set(v),
           ),
           const Divider(),
 

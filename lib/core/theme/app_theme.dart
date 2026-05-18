@@ -19,7 +19,7 @@ abstract final class AppTheme {
       textTheme: AppTypography.textTheme(scheme),
 
       // ── Shape tokens (architecture §9) ──────────────────────────────────
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         elevation: 2,
         shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.all(Radius.circular(16)),
@@ -27,7 +27,6 @@ abstract final class AppTheme {
         color: scheme.surfaceContainerLow,
       ),
       floatingActionButtonTheme: FloatingActionButtonThemeData(
-        shape: const CircleBorder(),
         backgroundColor: scheme.primary,
         foregroundColor: scheme.onPrimary,
       ),

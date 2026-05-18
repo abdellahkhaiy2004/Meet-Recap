@@ -7,8 +7,10 @@ import 'package:table_calendar/table_calendar.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/animation_utils.dart';
 import '../../domain/entities/calendar_event.dart';
+import '../../domain/entities/folder.dart';
 import '../../domain/entities/meeting.dart';
 import '../state/calendar_controller.dart';
+import '../state/folder_controller.dart';
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
@@ -39,6 +41,8 @@ class CalendarPage extends ConsumerWidget {
       ),
       body: Column(
         children: [
+          // ── Folder filter chips (IP-0060/H2) ───────────────────────────
+          const _FolderFilterBar(),
           // ── Calendar widget ─────────────────────────────────────────────
           TableCalendar<Object>(
             locale: 'fr_FR',
@@ -134,7 +138,16 @@ class CalendarPage extends ConsumerWidget {
                 )
             : const Icon(Icons.add_rounded),
         label: const Text('Planifier'),
-        onPressed: () => context.push('/calendar/schedule'),
+        onPressed: () {
+          // IP-0060/H3 — pre-select folder when exactly one is active in the
+          // filter, so "Planifier" lands the user in the right folder context.
+          final filter = state.selectedFolderIds;
+          if (filter != null && filter.length == 1) {
+            context.push('/calendar/schedule?folderId=${filter.first}');
+          } else {
+            context.push('/calendar/schedule');
+          }
+        },
       ),
     );
   }
@@ -319,7 +332,8 @@ class _DaySheet extends StatelessWidget {
                       if (meetings.isNotEmpty) ...[
                         _SheetSectionHeader(
                             'Réunions passées (${meetings.length})'),
-                        ...meetings.map((m) => _MeetingRow(meeting: m)),
+                        ...meetings.map(
+                            (m) => _MeetingRow(meeting: m, inSheet: true)),
                       ],
                       if (events.isNotEmpty) ...[
                         _SheetSectionHeader(
@@ -344,6 +358,82 @@ class _DaySheet extends StatelessWidget {
       ][m];
 }
 
+// ── Folder filter bar (IP-0060/H2) ─────────────────────────────────────────────
+
+class _FolderFilterBar extends ConsumerWidget {
+  const _FolderFilterBar();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final foldersAsync = ref.watch(foldersStreamProvider);
+    final selected = ref.watch(calendarControllerProvider).selectedFolderIds;
+    final ctrl = ref.read(calendarControllerProvider.notifier);
+    final cs = Theme.of(context).colorScheme;
+
+    return foldersAsync.maybeWhen(
+      data: (folders) {
+        if (folders.length < 2) return const SizedBox.shrink();
+        return Container(
+          height: 48,
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          decoration: BoxDecoration(
+            border: Border(bottom: BorderSide(color: cs.outlineVariant)),
+          ),
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            children: [
+              const SizedBox(width: 4),
+              FilterChip(
+                label: const Text('Tous'),
+                selected: selected == null,
+                onSelected: (_) => ctrl.setFolderFilter(null),
+              ),
+              const SizedBox(width: 6),
+              for (final f in folders) ...[
+                _FolderChip(
+                  folder: f,
+                  selected: selected?.contains(f.id) ?? false,
+                  onTap: () => ctrl.toggleFolder(f.id),
+                ),
+                const SizedBox(width: 6),
+              ],
+            ],
+          ),
+        );
+      },
+      orElse: () => const SizedBox.shrink(),
+    );
+  }
+}
+
+class _FolderChip extends StatelessWidget {
+  const _FolderChip({
+    required this.folder,
+    required this.selected,
+    required this.onTap,
+  });
+  final Folder folder;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = AppColors.hexToColor(folder.colorHex);
+    return FilterChip(
+      label: Text(folder.name),
+      selected: selected,
+      onSelected: (_) => onTap(),
+      avatar: CircleAvatar(
+        backgroundColor: color,
+        radius: 8,
+      ),
+      selectedColor: color.withAlpha(64),
+      checkmarkColor: AppColors.contrastOn(color.withAlpha(64)),
+      side: selected ? BorderSide(color: color, width: 1.5) : null,
+    );
+  }
+}
+
 // ── Shared sub-widgets ─────────────────────────────────────────────────────────
 
 class _SheetSectionHeader extends StatelessWidget {
@@ -363,8 +453,13 @@ class _SheetSectionHeader extends StatelessWidget {
 }
 
 class _MeetingRow extends StatelessWidget {
-  const _MeetingRow({required this.meeting});
+  const _MeetingRow({required this.meeting, this.inSheet = false});
   final Meeting meeting;
+  /// When true (used inside the day bottom-sheet), the sheet is dismissed
+  /// before navigating. When false (inline _DayPreview tap), no pop happens.
+  /// Without this guard the inline tap was popping the calendar page itself,
+  /// which produced a black screen on the way to the meeting detail.
+  final bool inSheet;
 
   @override
   Widget build(BuildContext context) {
@@ -384,10 +479,11 @@ class _MeetingRow extends StatelessWidget {
       subtitle: Text(
           '${dur.inMinutes} min ${dur.inSeconds % 60} s'),
       onTap: () {
-        Navigator.of(context, rootNavigator: false).pop();
-        context.push(
-          '/folders/${meeting.folderId}/meetings/${meeting.id}',
-        );
+        if (inSheet) Navigator.of(context, rootNavigator: false).pop();
+        // Use the calendar-branch meeting route so we stay in this tab's
+        // back-stack (the canonical /folders/X/meetings/Y route is unreachable
+        // via push from a different shell branch — see app_router.dart).
+        context.push('/calendar/meetings/${meeting.id}');
       },
     );
   }

@@ -33,7 +33,7 @@ class AppDatabase extends _$AppDatabase {
             FoldersCompanion.insert(
               name: 'Boîte de réception',
               category: const Value('other'),
-              colorHex: const Value('7C3AED'),
+              colorHex: '7C3AED',
               iconName: const Value('inbox'),
               isInbox: const Value(true),
             ),
