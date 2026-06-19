@@ -1,4 +1,4 @@
-# Auto-Derdacha
+# Meet-Recap
 
 Multilingual meeting recorder and summarizer — handles Darija, French, and English (code-switching included). Records audio locally, sends it to Groq's free Whisper endpoint for transcription, then generates a structured Markdown summary with an LLM.
 
